@@ -1,0 +1,214 @@
+.playerContainer {
+  position: relative;
+  width: 100%;
+  background: linear-gradient(145deg, #0a0a0a, #1a1a2e);
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 
+    0 20px 40px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  aspect-ratio: 16/9;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  border-radius: 15px;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 400px;
+  background: linear-gradient(145deg, rgba(15,15,25,0.8), rgba(25,25,40,0.9));
+  border: 2px dashed rgba(100,255,218,0.3);
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.placeholderContent {
+  text-align: center;
+  color: #8892b0;
+}
+
+.placeholderIcon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.placeholderContent h3 {
+  font-family: 'Orbitron', monospace;
+  color: #64ffda;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(10px);
+  color: #64ffda;
+  z-index: 10;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(100,255,218,0.3);
+  border-top: 3px solid #64ffda;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  padding: 1rem;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.showControls {
+  transform: translateY(0);
+}
+
+.progressBar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress {
+  height: 100%;
+  background: linear-gradient(90deg, #64ffda, #00d4ff);
+  border-radius: 3px;
+  transition: width 0.1s ease;
+  box-shadow: 0 0 10px rgba(100,255,218,0.5);
+}
+
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #ffffff;
+}
+
+.playBtn {
+  background: linear-gradient(145deg, #64ffda, #00d4ff);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(100,255,218,0.3);
+}
+
+.playBtn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 20px rgba(100,255,218,0.4);
+}
+
+.timeDisplay {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.9rem;
+  color: #8892b0;
+  min-width: 100px;
+}
+
+.volumeControl {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.volumeSlider {
+  width: 80px;
+  height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #64ffda;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(100,255,218,0.5);
+}
+
+.fullscreenBtn {
+  background: none;
+  border: none;
+  color: #8892b0;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 5px;
+  transition: all 0.3s ease;
+}
+
+.fullscreenBtn:hover {
+  color: #64ffda;
+  background: rgba(100,255,218,0.1);
+}
+
+@media (max-width: 768px) {
+  .controls {
+    padding: 0.5rem;
+  }
+  
+  .controlsRow {
+    gap: 0.5rem;
+  }
+  
+  .volumeControl {
+    display: none;
+  }
+  
+  .timeDisplay {
+    font-size: 0.8rem;
+    min-width: 80px;
+  }
+}
