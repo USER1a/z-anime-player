@@ -12,6 +12,7 @@ export default function VideoPlayer({ src }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [userInteracted, setUserInteracted] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -40,6 +41,7 @@ export default function VideoPlayer({ src }) {
         
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           setLoading(false);
+          console.log('HLS manifest loaded successfully');
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
@@ -103,12 +105,41 @@ export default function VideoPlayer({ src }) {
     };
   }, [src]);
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const video = videoRef.current;
-    if (isPlaying) {
-      video.pause();
-    } else {
-      video.play();
+    if (!video) return;
+
+    // Mark that user has interacted
+    setUserInteracted(true);
+
+    try {
+      if (isPlaying) {
+        video.pause();
+        setIsPlaying(false);
+      } else {
+        // Handle the play promise properly
+        const playPromise = video.play();
+        
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            setIsPlaying(true);
+            console.log('Video started playing successfully');
+          }).catch(error => {
+            console.warn('Video play interrupted:', error.message);
+            setIsPlaying(false);
+            
+            // Try again after a short delay if interrupted
+            if (error.name === 'AbortError') {
+              setTimeout(() => {
+                video.play().catch(console.warn);
+              }, 100);
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Video play error:', error.message);
+      setIsPlaying(false);
     }
   };
 
@@ -171,13 +202,28 @@ export default function VideoPlayer({ src }) {
         ref={videoRef}
         className={styles.video}
         playsInline
+        preload="metadata"
         onClick={togglePlay}
+        onLoadedMetadata={() => setLoading(false)}
+        onError={(e) => {
+          console.error('Video error:', e);
+          setLoading(false);
+        }}
       />
       
       {loading && (
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
           <p>Loading stream...</p>
+        </div>
+      )}
+
+      {!loading && !userInteracted && (
+        <div className={styles.playOverlay} onClick={togglePlay}>
+          <button className={styles.bigPlayButton}>
+            <span className={styles.playIcon}>▶️</span>
+            <span>Click to Play</span>
+          </button>
         </div>
       )}
 
