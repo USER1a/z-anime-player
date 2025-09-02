@@ -42,7 +42,7 @@ export default async function handler(req, res) {
       server,
       audio,
       sources: [{
-        file: `${M3U8_PROXY_URL}/proxy?url=https://example.com/stream.m3u8`,
+        file: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
         label: `${server.toUpperCase()} - ${audio.toUpperCase()}`,
         type: 'hls',
         quality: '1080p',
