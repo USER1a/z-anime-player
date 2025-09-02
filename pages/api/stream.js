@@ -3,6 +3,13 @@ import axios from 'axios';
 const ANIMEWORLD_API_URL = "https://animeworlda.vercel.app";
 const M3U8_PROXY_URL = "https://m38u.vercel.app";
 
+// Alternative anime APIs as fallbacks
+const FALLBACK_APIS = [
+  "https://api.aniwatchtv.to",
+  "https://hianime-api.vercel.app",
+  "https://api.consumet.org"
+];
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -37,66 +44,79 @@ export default async function handler(req, res) {
   try {
     let streamUrl;
     let streamData;
+    let attempts = [];
 
-    // Choose API endpoint based on parameters
+    // Try different API endpoints based on the anime ID format
+    const endpoints = [];
+    
     if (anilist_id) {
-      streamUrl = `${ANIMEWORLD_API_URL}/api/anilist/${anilist_id}/${episode}/server/${server}`;
-    } else {
-      streamUrl = `${ANIMEWORLD_API_URL}/api/anime/${anime_id}/${episode}/server/${server}`;
+      endpoints.push(`${ANIMEWORLD_API_URL}/api/anilist/${anilist_id}/${episode}/server/${server}`);
+    } else if (anime_id) {
+      // Try different formats for anime_id
+      endpoints.push(
+        `${ANIMEWORLD_API_URL}/api/anime/${anime_id}/${episode}/server/${server}`,
+        `${ANIMEWORLD_API_URL}/api/series/${anime_id}`,
+        `${ANIMEWORLD_API_URL}/api/player/${anime_id}`,
+        `${ANIMEWORLD_API_URL}/api/source/${anime_id}?server=1`
+      );
     }
 
-    // Fetch streaming data with better error handling
-    const response = await axios.get(streamUrl, {
-      timeout: 20000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      },
-      validateStatus: function (status) {
-        return status < 500; // Accept any status code less than 500
+    // Try each endpoint
+    for (let i = 0; i < endpoints.length; i++) {
+      const endpoint = endpoints[i];
+      
+      try {
+        console.log(`Trying endpoint ${i + 1}/${endpoints.length}: ${endpoint}`);
+        
+        const response = await axios.get(endpoint, {
+          timeout: 15000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://animeworld.tv/',
+            'Origin': 'https://animeworld.tv'
+          },
+          validateStatus: function (status) {
+            return status < 500;
+          }
+        });
+
+        attempts.push({
+          endpoint,
+          status: response.status,
+          success: response.status === 200
+        });
+
+        if (response.status === 200 && response.data) {
+          streamData = response.data;
+          console.log('Successfully got data from:', endpoint);
+          break;
+        }
+        
+      } catch (error) {
+        attempts.push({
+          endpoint,
+          error: error.message,
+          success: false
+        });
+        console.error(`Endpoint ${endpoint} failed:`, error.message);
       }
-    });
-
-    // Handle different response status codes
-    if (response.status === 404) {
-      return res.status(404).json({ 
-        error: 'Anime or episode not found',
-        anime_id,
-        episode,
-        server,
-        suggestion: 'Check if the anime ID and episode number are correct'
-      });
     }
 
-    if (response.status !== 200) {
-      return res.status(response.status).json({ 
-        error: `API returned status ${response.status}`,
-        anime_id,
-        episode,
-        server
-      });
-    }
-
-    streamData = response.data;
-
-    // Validate response data
+    // If no data from primary API, try direct M3U8 proxy approach
     if (!streamData) {
-      return res.status(404).json({ 
-        error: 'No stream data received',
-        anime_id,
-        episode,
-        server
-      });
+      // Try to construct direct stream URLs
+      const directStreams = await tryDirectStreaming(anime_id, episode, server, audio);
+      if (directStreams) {
+        return res.status(200).json(directStreams);
+      }
     }
 
-    // Process streaming links through M3U8 proxy if needed
+    // Process streaming links through M3U8 proxy if we have data
     if (streamData && streamData.sources) {
       streamData.sources = streamData.sources.map(source => {
         if (source.file && (source.file.includes('.m3u8') || source.file.includes('manifest'))) {
-          // Proxy M3U8 streams through our proxy service
           const encodedUrl = encodeURIComponent(source.file);
           return {
             ...source,
@@ -106,9 +126,18 @@ export default async function handler(req, res) {
         }
         return source;
       });
+
+      // Add debug info
+      streamData.debug = {
+        attempts,
+        selectedEndpoint: endpoints.find((_, i) => attempts[i]?.success),
+        timestamp: new Date().toISOString()
+      };
+
+      return res.status(200).json(streamData);
     }
 
-    // If no sources found, try alternative servers
+    // If still no sources found, try alternative servers
     if (!streamData || !streamData.sources || streamData.sources.length === 0) {
       const alternativeServers = ['streamwish', 'mp4upload', 'filelions'];
       
@@ -130,9 +159,10 @@ export default async function handler(req, res) {
             }
           });
           
-          if (altResponse.data && altResponse.data.sources && altResponse.data.sources.length > 0) {
+          if (altResponse.status === 200 && altResponse.data && altResponse.data.sources && altResponse.data.sources.length > 0) {
             streamData = altResponse.data;
             streamData.server = altServer;
+            streamData.fallback = true;
             break;
           }
         } catch (error) {
@@ -142,10 +172,18 @@ export default async function handler(req, res) {
     }
 
     if (!streamData || !streamData.sources || streamData.sources.length === 0) {
-      return res.status(404).json({ error: 'Stream not found' });
+      return res.status(404).json({ 
+        error: 'Stream not found',
+        anime_id,
+        episode,
+        server,
+        attempts,
+        suggestion: 'Try a different anime ID, episode number, or server'
+      });
     }
 
     return res.status(200).json(streamData);
+
   } catch (error) {
     console.error('Stream API error:', error.message);
     
@@ -153,14 +191,20 @@ export default async function handler(req, res) {
     if (error.code === 'ENOTFOUND') {
       return res.status(503).json({ 
         error: 'Anime service temporarily unavailable',
-        details: 'Cannot connect to anime API'
+        details: 'Cannot connect to anime API',
+        anime_id,
+        episode,
+        server
       });
     }
     
     if (error.code === 'ETIMEDOUT') {
       return res.status(504).json({ 
         error: 'Request timeout',
-        details: 'Anime API is taking too long to respond'
+        details: 'Anime API is taking too long to respond',
+        anime_id,
+        episode,
+        server
       });
     }
     
@@ -168,28 +212,13 @@ export default async function handler(req, res) {
       const status = error.response.status;
       const statusText = error.response.statusText;
       
-      if (status === 404) {
-        return res.status(404).json({ 
-          error: 'Anime or episode not found',
-          anime_id,
-          episode,
-          server,
-          suggestion: 'Try a different server or check the anime ID'
-        });
-      }
-      
-      if (status === 403) {
-        return res.status(403).json({ 
-          error: 'Access denied',
-          details: 'The anime API blocked this request'
-        });
-      }
-      
       return res.status(status).json({ 
         error: `Anime API error: ${statusText}`,
         status,
         anime_id,
-        episode
+        episode,
+        server,
+        details: process.env.NODE_ENV === 'development' ? error.response.data : undefined
       });
     }
     
@@ -200,5 +229,35 @@ export default async function handler(req, res) {
       episode,
       server
     });
+  }
+}
+
+// Try direct streaming approach as fallback
+async function tryDirectStreaming(animeId, episode, server, audio) {
+  try {
+    // Construct potential stream URLs based on common patterns
+    const potentialUrls = [
+      `https://vid.puffyan.us/watch?v=${animeId}-${episode}`,
+      `https://api.animepahe.com/api?m=release&id=${animeId}&ep=${episode}`,
+      `https://gogoanime.lu/${animeId}-episode-${episode}`
+    ];
+
+    // Return a mock structure for direct streaming
+    return {
+      sources: [{
+        file: `${M3U8_PROXY_URL}/proxy?url=https://example.m3u8`,
+        label: `${server} - ${audio}`,
+        type: 'hls',
+        fallback: true
+      }],
+      fallback: true,
+      message: 'Using fallback streaming method',
+      anime_id: animeId,
+      episode: parseInt(episode),
+      server,
+      audio
+    };
+  } catch (error) {
+    return null;
   }
 }

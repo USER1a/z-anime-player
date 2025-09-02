@@ -27,16 +27,31 @@ export default function Home() {
     setError('');
 
     try {
+      // First test if the API is working
+      const testResponse = await fetch(`/api/test-anime-api?anime_id=${animeId}&episode=${episode}&server=${server}`);
+      const testData = await testResponse.json();
+      
+      console.log('API Test Results:', testData);
+
+      // Try to get the stream
       const response = await fetch(`/api/stream?anime_id=${animeId}&episode=${episode}&server=${server}&audio=${audioType}`);
       const data = await response.json();
 
       if (response.ok && data.sources && data.sources.length > 0) {
         setStreamUrl(data.sources[0].file || data.sources[0].url);
+        setError(''); // Clear any previous errors
       } else {
-        setError(data.error || 'Stream not found');
+        setError(data.error || data.details || 'Stream not found');
+        console.error('Stream error:', data);
+        
+        // Show helpful debug information
+        if (data.attempts) {
+          console.log('API attempts:', data.attempts);
+        }
       }
     } catch (err) {
-      setError('Failed to load stream');
+      setError('Failed to load stream - Network error');
+      console.error('Network error:', err);
     }
 
     setLoading(false);
